@@ -1,0 +1,8 @@
+{
+  "appId": "ir.deepmine.documentreader",
+  "appName": "DeepMine Document Reader",
+  "webDir": "dist",
+  "SplashScreen": {
+    "showSpinner": false
+  }
+}

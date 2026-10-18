@@ -1,0 +1,25 @@
+@keyframes wordSlide {
+
+    0%,
+    30% {
+        transform: translateY(0%);
+    }
+
+    33%,
+    63% {
+        transform: translateY(-25%);
+    }
+
+    66%,
+    95% {
+        transform: translateY(-50%);
+    }
+
+    100% {
+        transform: translateY(-75%);
+    }
+}
+
+.animate-word-slide {
+    animation: wordSlide 8s cubic-bezier(0.83, 0, 0.17, 1) infinite;
+}
