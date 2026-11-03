@@ -1,0 +1,2527 @@
+From 93223e1d5114141d1958ee4c00c64a1f46357b27 Mon Sep 17 00:00:00 2001
+From: Reihaneh <reihanemoradi075@gmail.com>
+Date: Mon, 19 Oct 2026 01:01:11 +0330
+Subject: [PATCH] History Connection Done
+
+---
+ .env.development                              |    2 +-
+ README-CHANGES.txt                            |   26 +
+ backend/appsettings.json                      |    1 +
+ document-reader/.env.development              |   16 +
+ .../HistoryListItem/HistoryListItem.jsx       |   49 +
+ .../history/HistoryListItem/index.js          |    1 +
+ .../src/pages/auth/OtpVerifyPage.jsx          |  181 +++
+ .../src/pages/auth/PhoneLoginPage.jsx         |   83 ++
+ .../src/pages/history/HistoryPage.jsx         |  276 +++++
+ .../src/pages/profile/ProfilePage.jsx         |   44 +
+ document-reader/src/routes/AppRoutes.jsx      |  163 +++
+ document-reader/src/services/apiClient.js     | 1076 +++++++++++++++++
+ document-reader/vite.config.js                |   48 +
+ src/components/history/HistoryListItem.jsx    |   65 +-
+ src/components/history/index.js               |    2 +-
+ src/components/ui/dialog.jsx                  |   56 +
+ src/pages/history/Historypage.jsx             |  136 ++-
+ src/pages/profile/ProfilePage.jsx             |    1 -
+ src/routes/AppRoutes.jsx                      |   20 +-
+ src/services/apiClient.js                     |   16 +
+ 20 files changed, 2224 insertions(+), 38 deletions(-)
+ create mode 100644 README-CHANGES.txt
+ create mode 100644 document-reader/.env.development
+ create mode 100644 document-reader/src/components/history/HistoryListItem/HistoryListItem.jsx
+ create mode 100644 document-reader/src/components/history/HistoryListItem/index.js
+ create mode 100644 document-reader/src/pages/auth/OtpVerifyPage.jsx
+ create mode 100644 document-reader/src/pages/auth/PhoneLoginPage.jsx
+ create mode 100644 document-reader/src/pages/history/HistoryPage.jsx
+ create mode 100644 document-reader/src/pages/profile/ProfilePage.jsx
+ create mode 100644 document-reader/src/routes/AppRoutes.jsx
+ create mode 100644 document-reader/src/services/apiClient.js
+ create mode 100644 document-reader/vite.config.js
+ create mode 100644 src/components/ui/dialog.jsx
+
+diff --git a/.env.development b/.env.development
+index 021a3d1..be48da8 100644
+--- a/.env.development
++++ b/.env.development
+@@ -1,2 +1,2 @@
+-VITE_API_BASE_URL=https://localhost:7282
++VITE_API_BASE_URL=http://localhost:5027
+ VITE_MOCK_OTP=false
+diff --git a/README-CHANGES.txt b/README-CHANGES.txt
+new file mode 100644
+index 0000000..7165ed1
+--- /dev/null
++++ b/README-CHANGES.txt
+@@ -0,0 +1,26 @@
++فایل‌های تغییریافته/جدید — بخش History (نسخه نهایی)
++=====================================================
++
++مسیرها نسبت به ریشه ریپازیتوری The-Document-Reader-Copy هستند.
++کافیست محتوای هر فایل را روی همان مسیر در ریپازیتوری خودتان بگذارید.
++
++جدید (بخش History):
++  document-reader/src/pages/history/HistoryPage.jsx
++  document-reader/src/components/history/HistoryListItem/HistoryListItem.jsx
++  document-reader/src/components/history/HistoryListItem/index.js
++
++تغییریافته (History):
++  document-reader/src/services/apiClient.js      -> + historyService (getMine, rename)، + ttsService.getTimeline
++  document-reader/src/routes/AppRoutes.jsx        -> + مسیر /history
++  document-reader/src/pages/profile/ProfilePage.jsx -> فعال‌سازی دکمه «تاریخچه اسناد اخیر»
++
++تغییریافته (اتصال/اجرا):
++  document-reader/vite.config.js                  -> proxy مسیرهای API + allowedHosts + VITE_DEV_HTTPS
++  document-reader/.env.development                -> VITE_API_BASE_URL_WEB / MOBILE
++  document-reader/src/pages/auth/PhoneLoginPage.jsx -> نمایش debugCode در حالت توسعه
++  document-reader/src/pages/auth/OtpVerifyPage.jsx  -> نمایش debugCode در ارسال مجدد
++  project-backend/backend/DocumentReaderBackend.csproj -> + Microsoft.EntityFrameworkCore.Sqlite
++  project-backend/backend/Program.cs              -> Database:Provider (پیش‌فرض SqlServer) + EnsureCreated برای Sqlite
++
++نکته: فایل‌های dev.db / dev.db-shm / dev.db-wal دیتابیس اجرای محلی هستند و عمداً در این آرشیو نیامده‌اند؛
++پیشنهاد می‌شود به .gitignore اضافه شوند.
+diff --git a/backend/appsettings.json b/backend/appsettings.json
+index c177d30..8a0ea15 100644
+--- a/backend/appsettings.json
++++ b/backend/appsettings.json
+@@ -97,6 +97,7 @@
+       "http://localhost:3000",
+       "http://localhost:5173",
+       "https://localhost",
++      "https://localhost:5173",
+       "capacitor://localhost"
+     ]
+   },
+diff --git a/document-reader/.env.development b/document-reader/.env.development
+new file mode 100644
+index 0000000..ab9ffec
+--- /dev/null
++++ b/document-reader/.env.development
+@@ -0,0 +1,16 @@
++# Per-platform API base URLs (see apiClient.js + .env.example):
++#   WEB   → browser / PWA builds
++#   MOBILE → Capacitor native builds (the phone/emulator needs the LAN IP of
++#            the machine running the backend, because "localhost" on a device
++#            is the device itself)
++VITE_API_BASE_URL_WEB=https://localhost:7282
++VITE_API_BASE_URL_MOBILE=https://localhost:7282
++
++# Shared fallback when only one address is defined
++VITE_API_BASE_URL=https://localhost:7282
++
++# optional: request timeout in ms (default 90000; uploads/pipeline use no timeout)
++VITE_API_TIMEOUT_MS=90000
++
++# For LAN testing on a physical device, point MOBILE at your machine, e.g.:
++# VITE_API_BASE_URL_MOBILE=https://192.168.1.35:7282
+diff --git a/document-reader/src/components/history/HistoryListItem/HistoryListItem.jsx b/document-reader/src/components/history/HistoryListItem/HistoryListItem.jsx
+new file mode 100644
+index 0000000..041bfcf
+--- /dev/null
++++ b/document-reader/src/components/history/HistoryListItem/HistoryListItem.jsx
+@@ -0,0 +1,49 @@
++import React from 'react';
++import { MdArrowBackIosNew, MdOutlineDescription, MdOutlineEditNote } from 'react-icons/md';
++
++// One row of the history list. Mirrors the MenuListItem card language
++// (rounded-xl / border-slate-800 / bg-slate-900 / px-4 py-3.5). The row body
++// opens the document (like MenuListItem navigates) and the trailing pencil
++// button renames it via PATCH /history/{ocrId}/title.
++export default function HistoryListItem({
++    title,
++    fileName,
++    createdAtLabel,
++    onClick,
++    onRename,
++    isBusy = false,
++}) {
++    return (
++        <div className="flex w-full items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3.5 select-none">
++            <button type="button" onClick={onClick} disabled={isBusy}
++                className="group flex min-w-0 flex-1 items-center gap-2.5 text-right">
++                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-amber-300">
++                    <MdOutlineDescription size={"1.25rem"} />
++                </span>
++                <div className="flex min-w-0 flex-1 flex-col gap-1 text-right">
++                    <span className="truncate text-base font-bold text-slate-50">
++                        {title}
++                    </span>
++                    <span className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
++                        {fileName && (
++                            <>
++                                <span className="truncate">{fileName}</span>
++                                <span aria-hidden="true" className="shrink-0 text-slate-600">•</span>
++                            </>
++                        )}
++                        <span className="shrink-0">{createdAtLabel}</span>
++                    </span>
++                </div>
++                {isBusy
++                    ? <span className="loading loading-spinner loading-md shrink-0 text-amber-400"></span>
++                    : <MdArrowBackIosNew size={"1.1rem"}
++                        className="shrink-0 text-slate-400 transition-transform duration-200 group-active:-translate-x-1" />}
++            </button>
++            <button type="button" onClick={onRename} disabled={isBusy}
++                aria-label={`تغییر عنوان ${title}`}
++                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-slate-400 transition hover:text-amber-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50">
++                <MdOutlineEditNote size={"1.25rem"} />
++            </button>
++        </div>
++    );
++}
+diff --git a/document-reader/src/components/history/HistoryListItem/index.js b/document-reader/src/components/history/HistoryListItem/index.js
+new file mode 100644
+index 0000000..e37f650
+--- /dev/null
++++ b/document-reader/src/components/history/HistoryListItem/index.js
+@@ -0,0 +1 @@
++export { default } from "./HistoryListItem"
+diff --git a/document-reader/src/pages/auth/OtpVerifyPage.jsx b/document-reader/src/pages/auth/OtpVerifyPage.jsx
+new file mode 100644
+index 0000000..74ebfd1
+--- /dev/null
++++ b/document-reader/src/pages/auth/OtpVerifyPage.jsx
+@@ -0,0 +1,181 @@
++import { useEffect, useRef, useState } from "react";
++import { useLocation, useNavigate } from "react-router-dom";
++import { toast } from "sonner";
++import NumericKeypad from "../../components/common/NumericKeypad";
++import DigitsGroupInput from "../../components/common/DigitsGroupInput";
++import ActionButton from "../../components/common/ActionButton/ActionButton";
++import { PHONE_NUMBER_LENGTH, OTP_CODE_LENGTH, PHONE_KEY } from "../../constants/auth";
++// All API calls go through apiClient
++import { authService, getApiErrorMessage, getRetryAfterSeconds } from "../../services/apiClient";
++import { useAuth } from "../../contexts/AuthContext";
++import { DISPLAY_NAME_KEY } from "../../constants/home";
++
++const RESEND_SECONDS = 60;
++
++// MM:SS countdown format, e.g. "01:59" (matches the original HTML prototype)
++const formatResendTime = (seconds) => {
++    const mins = Math.floor(seconds / 60);
++    const secs = seconds % 60;
++    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
++};
++
++export default function OtpVerifyPage() {
++    const navigate = useNavigate();
++    const location = useLocation();
++    const { login } = useAuth();
++
++    // Read the phone number exactly once on mount and freeze it in a ref.
++    // After navigating away (while MainLayout's exit animation keeps changing
++    // the location), the value stays stable so the guard below doesn't misfire.
++    const phoneRef = useRef(
++        location.state?.phone ?? sessionStorage.getItem(PHONE_KEY) ?? ""
++    );
++    const phone = phoneRef.current;
++
++    // Persist it so a reload or direct visit to /auth/otp keeps the number
++
++    
++    /*اینجا پیشنهاد کالد برای بهتر کردن این این سمت اینه که از useEffect استفاده کنیم*/
++
++    //useEffect(() => { if (phone) sessionStorage.setItem(...) }, [phone])
++
++    if (phone) sessionStorage.setItem(PHONE_KEY, phone);
++    const [value, setValue] = useState("");
++    const [isLoading, setIsLoading] = useState(false);
++    const [resendIn, setResendIn] = useState(RESEND_SECONDS);
++
++    // Guard: run once on mount only (empty deps)
++    useEffect(() => {
++        if (phone.length < PHONE_NUMBER_LENGTH) {
++            navigate("/auth/phone", { replace: true });
++        }
++        // eslint-disable-next-line react-hooks/exhaustive-deps
++    }, []);
++
++    // "Resend" button countdown
++    useEffect(() => {
++        if (resendIn <= 0) return;
++        const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
++        return () => clearTimeout(t);
++    }, [resendIn]);
++
++    const changeValueHandler = (nextDigit) => {
++        setValue((prev) =>
++            prev.length < OTP_CODE_LENGTH ? prev + nextDigit : prev
++        );
++    };
++
++    const removeDigitHandler = () => {
++        setValue((prev) => prev.slice(0, -1));
++    };
++
++    const handleResend = async () => {
++        if (resendIn > 0 || isLoading) return;
++        setIsLoading(true);
++        try {
++            const data = await authService.sendCode(phone);
++            toast.success("کد جدید ارسال شد");
++            // Dev-mode only: surface the debugCode the backend exposes in
++            // Development (see PhoneLoginPage for details)
++            if (data?.debugCode) {
++                toast.info(`کد تأیید (حالت توسعه): ${data.debugCode}`, {
++                    duration: 15000,
++                });
++            }
++            setValue("");
++            setResendIn(RESEND_SECONDS);
++         } catch (err) {
++            // 429 + retryAfterSeconds: the resend interval has not passed yet,
++            // so resume the countdown instead of leaving the button active
++            const retryAfter = getRetryAfterSeconds(err);
++            if (retryAfter !== null) {
++                setResendIn(retryAfter);
++            }
++             toast.error(getApiErrorMessage(err, "ارسال مجدد کد ناموفق بود"));
++        } finally {
++            setIsLoading(false);
++        }
++    };
++
++    const handleVerify = async () => {
++        if (isLoading || value.length !== OTP_CODE_LENGTH) return;
++        setIsLoading(true);
++        try {
++            // 1) Verify the code with the backend; tokens are stored
++            //    in localStorage automatically inside this call
++            const data = await authService.verifyCode({ number: phone, code: value });
++
++            // Seed the display-name cache from the login response so the
++            // real name shows right after login; ProfileContext re-syncs
++            // it via GET /user/me afterwards
++            if (data?.user?.fullName) {
++                localStorage.setItem(DISPLAY_NAME_KEY, data.user.fullName);
++            }
++
++            // 2) Notify the auth context so the guards update;
++            //    the verified phone number is persisted alongside the tokens
++            login(data?.user?.number ?? phone);
++
++            // 3) Go to /home — replace keeps the back button out of the OTP page
++            navigate("/home", { replace: true });
++            // No setState past this point — the page is being replaced
++        } catch (err) {
++            toast.error(getApiErrorMessage(err, "کد تأیید نامعتبر است"));
++            setValue("");
++            setIsLoading(false);
++        }
++    };
++
++    return (
++        <div className="flex-1 w-full h-full flex flex-col justify-between">
++            <div className="w-full">
++                <div className="flex w-full flex-col gap-5">
++                    <h2 className="text-2xl font-bold">کد تأیید را وارد کنید</h2>
++                    <div className="text-gray-400">
++                        کد تأیید برای {phone} پیامک شد
++                    </div>
++                    <div>
++                        <DigitsGroupInput
++                            digits={OTP_CODE_LENGTH}
++                            value={value}
++                            className="px-1"
++                        />
++                        <NumericKeypad
++                            onPushKey={changeValueHandler}
++                            onRemoveDigit={removeDigitHandler}
++                            isActive={!isLoading}
++                        />
++                    </div>
++                </div>
++            </div>
++            <div className="flex flex-col gap-3">
++                {resendIn > 0 ? (
++                    // Waiting state — plain countdown text
++                    // (the old prototype's #waitForResendCodeBtn)
++                    <div className="flex justify-center py-3 text-sm text-gray-400">
++                        {formatResendTime(resendIn)} مانده تا ارسال دوبارۀ کد
++                    </div>
++                ) : (
++                    // Ready state — the actual resend button
++                    // (the old prototype's #resendCodeBtn)
++                    <button
++                        type="button"
++                        onClick={handleResend}
++                        disabled={isLoading}
++                        className="flex w-full items-center justify-center rounded-2xl border border-slate-800 bg-slate-900 py-3 text-sm font-bold text-slate-100 shadow-lg transition hover:bg-slate-800/80 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
++                    >
++                        دریافت دوبارۀ کد از طریق پیامک
++                    </button>
++                )}
++                <ActionButton
++                    isActive={value.length === OTP_CODE_LENGTH}
++                    isLoading={isLoading}
++                    type="success"
++                    onClick={handleVerify}
++                >
++                    تأیید و ورود
++                </ActionButton>
++            </div>
++        </div>
++    );
++}
+diff --git a/document-reader/src/pages/auth/PhoneLoginPage.jsx b/document-reader/src/pages/auth/PhoneLoginPage.jsx
+new file mode 100644
+index 0000000..3b31eed
+--- /dev/null
++++ b/document-reader/src/pages/auth/PhoneLoginPage.jsx
+@@ -0,0 +1,83 @@
++import { useState } from "react";
++import { useNavigate } from "react-router-dom";
++import { toast } from "sonner";
++import NumericKeypad from "../../components/common/NumericKeypad";
++import DigitsGroupInput from "../../components/common/DigitsGroupInput";
++import ActionButton from "../../components/common/ActionButton/ActionButton";
++import { useAuth } from "../../contexts/AuthContext";
++import { PHONE_NUMBER_LENGTH, MIN_PHONE_LENGTH } from "../../constants/auth";
++// All API calls go through apiClient (not the legacy parallel files)
++import { authService, getApiErrorMessage } from "../../services/apiClient";
++
++export default function PhoneLoginPage() {
++    const navigate = useNavigate();
++    const { phoneNumber, setPhoneNumber } = useAuth();
++    const [isLoading, setIsLoading] = useState(false);
++
++    const changeValueHandler = (nextDigit) => {
++        setPhoneNumber((prev) =>
++            prev.length < PHONE_NUMBER_LENGTH ? prev + nextDigit : prev
++        );
++    };
++
++    const removeDigitHandler = () => {
++        if (phoneNumber.length > MIN_PHONE_LENGTH) {
++            setPhoneNumber((prev) => prev.slice(0, -1));
++        }
++    };
++
++    const handleSendCode = async () => {
++        if (isLoading || phoneNumber.length !== PHONE_NUMBER_LENGTH) return;
++        setIsLoading(true);
++        try {
++            // Backend call: POST /auth/send-code
++            const data = await authService.sendCode(phoneNumber);
++            // Dev-mode only: when Auth:ExposeDebugCode is on, the backend
++            // answers with the SMS code as debugCode so login can be tested
++            // without a real SMS gateway
++            if (data?.debugCode) {
++                toast.info(`کد تأیید (حالت توسعه): ${data.debugCode}`, {
++                    duration: 15000,
++                });
++            }
++            // Pass the phone number via router state; OtpVerifyPage reads it
++            navigate("/auth/otp", { state: { phone: phoneNumber } });
++            // No setState after navigate — the page is transitioning
++        } catch (err) {
++            toast.error(getApiErrorMessage(err));
++            setIsLoading(false);
++        }
++    };
++
++    return (
++        <div className="flex-1 w-full h-full flex flex-col justify-between">
++            <div className="w-full">
++                <div className="flex w-full flex-col gap-5">
++                    <h2 className="text-2xl font-bold">
++                        شماره موبایل خود را وارد کنید
++                    </h2>
++                    <div>
++                        <DigitsGroupInput
++                            digits={PHONE_NUMBER_LENGTH}
++                            value={phoneNumber}
++                            className="px-1"
++                        />
++                        <NumericKeypad
++                            onPushKey={changeValueHandler}
++                            onRemoveDigit={removeDigitHandler}
++                            isActive={!isLoading}
++                        />
++                    </div>
++                </div>
++            </div>
++            <ActionButton
++                isActive={phoneNumber.length === PHONE_NUMBER_LENGTH}
++                isLoading={isLoading}
++                type="success"
++                onClick={handleSendCode}
++            >
++                تایید و ادامه
++            </ActionButton>
++        </div>
++    );
++}
+diff --git a/document-reader/src/pages/history/HistoryPage.jsx b/document-reader/src/pages/history/HistoryPage.jsx
+new file mode 100644
+index 0000000..65cd105
+--- /dev/null
++++ b/document-reader/src/pages/history/HistoryPage.jsx
+@@ -0,0 +1,276 @@
++import React, { useEffect, useState } from 'react';
++import { useNavigate } from 'react-router-dom';
++import { toast } from 'sonner';
++import { MdErrorOutline, MdOutlineHistory, MdRefresh } from 'react-icons/md';
++import HistoryListItem from '../../components/history/HistoryListItem';
++import {
++    Dialog,
++    DialogContent,
++    DialogFooter,
++    DialogHeader,
++    DialogTitle,
++} from '@/components/ui/dialog';
++import { Input } from '@/components/ui/input';
++import { CAPTURED_PIPELINE_KEY, CAPTURED_TEXT_KEY } from '@/constants/player';
++// All API calls go through apiClient
++import {
++    historyService,
++    ocrService,
++    ttsService,
++    getApiErrorMessage,
++} from '../../services/apiClient';
++
++// Backend contract: GET /history answers OcrHistoryResponseDto
++// ({ page, pageSize, totalCount, totalPages, items:[{ ocrId, title,
++// inputOriginalFileName, createdAt }] }). pageSize is not sent explicitly —
++// the backend picks its own default (20) and echoes it back in the response.
++const FIRST_PAGE = 1;
++
++// Backend contract: UpdateHistoryTitleRequestDto.Title is [MaxLength(200)]
++// (OcrHistoryTitleGenerator.MaxTitleLength)
++const TITLE_MAX_LENGTH = 200;
++
++// createdAt is a UTC DateTime serialized as ISO-8601; show it in the
++// Persian (Jalali) calendar like the rest of the Persian-first UI.
++const formatCreatedAt = (value) => {
++    const date = new Date(value);
++    if (Number.isNaN(date.getTime())) return '';
++    return date.toLocaleString('fa-IR', { dateStyle: 'medium', timeStyle: 'short' });
++};
++
++export default function HistoryPage() {
++    const navigate = useNavigate();
++
++    // List data — kept in page state (same pattern as the other pages)
++    const [items, setItems] = useState([]);
++    const [page, setPage] = useState(FIRST_PAGE);
++    const [totalPages, setTotalPages] = useState(0);
++
++    // Initial-load status; "loading" | "ready" | "error"
++    const [status, setStatus] = useState("loading");
++    const [errorMessage, setErrorMessage] = useState("");
++    const [isLoadingMore, setIsLoadingMore] = useState(false);
++
++    // ocrId of the document currently being opened in the player
++    const [openingId, setOpeningId] = useState(null);
++
++    // Rename dialog state
++    const [renameItem, setRenameItem] = useState(null);
++    const [renameValue, setRenameValue] = useState("");
++    const [isSavingTitle, setIsSavingTitle] = useState(false);
++
++    // Real API call: GET /history?page=N (see historyService in apiClient)
++    const fetchPage = async (nextPage, { replace = false } = {}) => {
++        if (replace) {
++            setStatus("loading");
++            setErrorMessage("");
++        } else {
++            setIsLoadingMore(true);
++        }
++
++        try {
++            const response = await historyService.getMine({ page: nextPage });
++
++            setItems((prev) => replace ? (response?.items || []) : [...prev, ...(response?.items || [])]);
++            setPage(response?.page ?? nextPage);
++            setTotalPages(response?.totalPages ?? 0);
++            setStatus("ready");
++        } catch (err) {
++            if (replace) {
++                setErrorMessage(getApiErrorMessage(err, "دریافت تاریخچه ناموفق بود"));
++                setStatus("error");
++            } else {
++                // Loading more failed — keep the already-visible list and
++                // report the failure transiently, like the other pages do
++                toast.error(getApiErrorMessage(err, "دریافت موارد بیشتر ناموفق بود"));
++            }
++        } finally {
++            setIsLoadingMore(false);
++        }
++    };
++
++    useEffect(() => {
++        fetchPage(FIRST_PAGE, { replace: true });
++    }, []);
++
++    // Open one history document in the speech player — the same storage
++    // contract the camera capture flow uses (see useDocumentToSpeech):
++    //   1) GET /ocr/{ocrId}         → the stored document text
++    //   2) POST /tts                → speech for that text (with ocrId linked)
++    //   3) GET /tts/{ttsId}/timeline → audioUrl + per-sentence timings
++    const handleOpenDocument = async (item) => {
++        if (openingId) return;
++        setOpeningId(item.ocrId);
++
++        try {
++            const ocr = await ocrService.getById(item.ocrId);
++            const text = ocr?.text || "";
++
++            const tts = await ttsService.create({ text, ocrId: item.ocrId });
++            const timeline = await ttsService.getTimeline(tts.ttsId);
++
++            localStorage.setItem(CAPTURED_TEXT_KEY, text);
++            localStorage.setItem(
++                CAPTURED_PIPELINE_KEY,
++                JSON.stringify({
++                    ...timeline,
++                    audioUrl: timeline?.audioUrl || tts?.timedAudioUrl,
++                }),
++            );
++
++            navigate("/player");
++            // No setState after navigate — the page is transitioning
++        } catch (err) {
++            toast.error(getApiErrorMessage(err, "بازکردن سند ناموفق بود"));
++            setOpeningId(null);
++        }
++    };
++
++    const handleOpenRename = (item) => {
++        setRenameItem(item);
++        setRenameValue(item.title || "");
++    };
++
++    // Real API call: PATCH /history/{ocrId}/title (see historyService)
++    const handleRenameSave = async () => {
++        const title = renameValue.trim();
++        if (!renameItem || isSavingTitle) return;
++
++        if (!title) {
++            toast.error("عنوان نمی‌تواند خالی باشد.");
++            return;
++        }
++
++        setIsSavingTitle(true);
++        try {
++            const updated = await historyService.rename(renameItem.ocrId, title);
++
++            // The backend answers the updated item — merge it into the row
++            setItems((prev) =>
++                prev.map((it) => (it.ocrId === renameItem.ocrId ? { ...it, ...updated } : it)),
++            );
++            setRenameItem(null);
++            toast.success("عنوان سند با موفقیت تغییر کرد.", { duration: 2000 });
++        } catch (err) {
++            toast.error(getApiErrorMessage(err, "تغییر عنوان ناموفق بود"));
++        } finally {
++            setIsSavingTitle(false);
++        }
++    };
++
++    const hasMore = status === "ready" && page < totalPages;
++
++    return (
++        <div className="flex h-full w-full flex-1 flex-col gap-4">
++            {/* Loading — initial fetch */}
++            {status === "loading" && (
++                <div className="flex flex-1 flex-col items-center justify-center gap-3">
++                    <span className="loading loading-spinner loading-lg text-amber-400"></span>
++                    <p className="text-sm font-medium text-slate-400">
++                        در حال دریافت تاریخچه...
++                    </p>
++                </div>
++            )}
++
++            {/* Error — initial fetch failed */}
++            {status === "error" && (
++                <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
++                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-red-400">
++                        <MdErrorOutline size={"2rem"} />
++                    </div>
++                    <div className="flex flex-col gap-1.5">
++                        <h2 className="text-lg font-bold text-slate-50">
++                            دریافت تاریخچه ناموفق بود
++                        </h2>
++                        <p className="max-w-64 text-sm leading-relaxed text-slate-400">
++                            {errorMessage}
++                        </p>
++                    </div>
++                    <button type="button" onClick={() => fetchPage(FIRST_PAGE, { replace: true })}
++                        className="flex items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-6 py-3 text-base font-bold text-cyan-400 transition select-none active:scale-[0.98]">
++                        <MdRefresh size={"1.25rem"} />
++                        تلاش مجدد
++                    </button>
++                </div>
++            )}
++
++            {/* Ready — empty history */}
++            {status === "ready" && items.length === 0 && (
++                <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
++                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-amber-300">
++                        <MdOutlineHistory size={"2rem"} />
++                    </div>
++                    <div className="flex flex-col gap-1.5">
++                        <h2 className="text-lg font-bold text-slate-50">
++                            هنوز سندی ثبت نشده است
++                        </h2>
++                        <p className="max-w-64 text-sm leading-relaxed text-slate-400">
++                            اسنادی که تصویربرداری می‌کنید، اینجا برایتان نگه‌داری می‌شوند
++                        </p>
++                    </div>
++                </div>
++            )}
++
++            {/* Ready — history list */}
++            {status === "ready" && items.length > 0 && (
++                <div className="flex w-full flex-col gap-2">
++                    {items.map((item) => (
++                        <HistoryListItem
++                            key={item.ocrId}
++                            title={item.title}
++                            fileName={item.inputOriginalFileName}
++                            createdAtLabel={formatCreatedAt(item.createdAt)}
++                            isBusy={openingId === item.ocrId}
++                            onClick={() => handleOpenDocument(item)}
++                            onRename={() => handleOpenRename(item)}
++                        />
++                    ))}
++                </div>
++            )}
++
++            {/* Pagination — more pages left on the backend */}
++            {hasMore && (
++                <button type="button" onClick={() => fetchPage(page + 1)} disabled={isLoadingMore}
++                    className="mt-auto flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3.5 text-base font-bold text-cyan-400 transition select-none active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60">
++                    {isLoadingMore && <span className="loading loading-spinner loading-md"></span>}
++                    نمایش موارد بیشتر
++                </button>
++            )}
++
++            {/* Rename dialog — PATCH /history/{ocrId}/title */}
++            <Dialog open={!!renameItem} onOpenChange={(open) => !open && setRenameItem(null)}>
++                <DialogContent dir="rtl"
++                    className="max-w-sm border-slate-800 bg-slate-900 text-slate-50">
++                    <DialogHeader>
++                        <DialogTitle className="text-right text-slate-50">
++                            تغییر عنوان سند
++                        </DialogTitle>
++                    </DialogHeader>
++                    <div className="flex w-full flex-col gap-1.5">
++                        <label htmlFor="history-title" className="text-base font-bold text-slate-100">
++                            عنوان
++                        </label>
++                        <Input id="history-title" dir="rtl" value={renameValue}
++                            onChange={(e) => setRenameValue(e.target.value)}
++                            onKeyDown={(e) => e.key === "Enter" && handleRenameSave()}
++                            maxLength={TITLE_MAX_LENGTH} disabled={isSavingTitle}
++                            placeholder="عنوان سند را وارد کنید"
++                            className="h-10 rounded-xl border-slate-800 bg-slate-900 px-3 text-sm font-bold text-slate-100" />
++                    </div>
++                    <DialogFooter className="flex flex-row gap-2">
++                        <button type="button" onClick={() => setRenameItem(null)} disabled={isSavingTitle}
++                            className="flex h-11 flex-1 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-base font-bold text-slate-300 transition active:scale-[0.98] disabled:opacity-50">
++                            انصراف
++                        </button>
++                        <button type="button" onClick={handleRenameSave}
++                            disabled={isSavingTitle || !renameValue.trim()}
++                            className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-cyan-400 text-base font-bold text-slate-900 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-500 disabled:text-gray-800">
++                            {isSavingTitle && <span className="loading loading-spinner loading-md"></span>}
++                            ذخیره
++                        </button>
++                    </DialogFooter>
++                </DialogContent>
++            </Dialog>
++        </div>
++    );
++}
+diff --git a/document-reader/src/pages/profile/ProfilePage.jsx b/document-reader/src/pages/profile/ProfilePage.jsx
+new file mode 100644
+index 0000000..cd9fca7
+--- /dev/null
++++ b/document-reader/src/pages/profile/ProfilePage.jsx
+@@ -0,0 +1,44 @@
++import React from 'react'
++import { useNavigate } from 'react-router-dom'
++import { MdOutlineEditNote, MdOutlineHistory, MdOutlineLogout } from 'react-icons/md'
++import UserCard from '../../components/common/UserCard'
++import MenuListItem from '../../components/common/MenuListItem'
++import { useAuth } from '../../contexts/AuthContext'
++import { useProfile } from '../../contexts/ProfileContext'
++
++export default function ProfilePage() {
++    const navigate = useNavigate()
++    const { phoneNumber, logout } = useAuth()
++    // Name comes from ProfileContext (synced with the server);
++    // it refreshes here immediately after being edited
++    const { displayName } = useProfile()
++
++    // Real logout: clears tokens and cached profile data, notifies the
++    // server, and resets auth state. No navigate() needed — as soon as
++    // isAuthenticated flips, the RequireAuth guard around this page
++    // redirects to /auth/phone.
++    const handleLogout = () => {
++        logout()
++    }
++
++    return (
++        <div className="flex w-full flex-1 flex-col gap-4">
++            <UserCard name={displayName} phone={phoneNumber} />
++            <div className="flex w-full flex-col gap-2">
++                <MenuListItem
++                    icon={<MdOutlineEditNote size={"1.5rem"} />}
++                    label="ویرایش پروفایل"
++                    onClick={() => navigate("/profile/edit")} />
++                <MenuListItem
++                    icon={<MdOutlineHistory size={"1.5rem"} />}
++                    label="تاریخچه اسناد اخیر"
++                    onClick={() => navigate("/history")} />
++                <MenuListItem
++                    icon={<MdOutlineLogout size={"1.5rem"} />}
++                    label="خروج از حساب کاربری"
++                    variant="danger"
++                    onClick={handleLogout} />
++            </div>
++        </div>
++    )
++}
+diff --git a/document-reader/src/routes/AppRoutes.jsx b/document-reader/src/routes/AppRoutes.jsx
+new file mode 100644
+index 0000000..78b323d
+--- /dev/null
++++ b/document-reader/src/routes/AppRoutes.jsx
+@@ -0,0 +1,163 @@
++import { createBrowserRouter, RouterProvider } from "react-router-dom";
++import MainLayout from "../components/layout/MainLayout";
++
++import PhoneLoginPage from "../pages/auth/PhoneLoginPage";
++import OtpVerifyPage from "../pages/auth/OtpVerifyPage";
++import HomePage from "../pages/home/HomePage";
++import SelectModePage from "../pages/camera/SelectModePage";
++import CameraPage from "../pages/camera/CameraPage";
++import PlayerPage from "../pages/player/PlayerPage";
++import HistoryPage from "../pages/history/HistoryPage";
++import ProfilePage from "../pages/profile/ProfilePage";
++import EditProfilePage from "../pages/profile/EditProfilePage";
++import SettingsPage from "../pages/settings/SettingsPage";
++import ReportBugPage from "../pages/settings/ReportBugPage";
++
++import { RequireAuth, RedirectIfAuthenticated, EntryRedirect } from "./guards";
++
++const router = createBrowserRouter([
++    {
++        path: "/",
++        element: <MainLayout />,
++        children: [
++            // Each route's handle can define:
++            //   title    — header title
++            //   showBack — header back arrow visibility
++            //   backTo   — logical parent page; the back arrow (and the
++            //              Android hardware back button) always navigates
++            //              there instead of stepping back in raw history
++            // Smart entry: authenticated → /home, otherwise → /auth/phone
++            { index: true, element: <EntryRedirect /> },
++
++            // Auth flow — visible only to unauthenticated users
++            {
++                element: <RedirectIfAuthenticated />,
++                children: [
++                    {
++                        path: "auth",
++                        children: [
++                            {
++                                path: "phone", element: <PhoneLoginPage />, handle: {
++                                    title: "ورود به حساب کاربری",
++                                    showBack: false
++                                },
++                            },
++                            {
++                                path: "otp", element: <OtpVerifyPage />, handle: {
++                                    title: "ورود به حساب کاربری",
++                                    showBack: true,
++                                    backTo: "/auth/phone"
++                                }
++                            },
++                        ],
++                    },
++                ]
++            },
++
++            // Everything below sits behind the auth guard
++            {
++                element: <RequireAuth />,
++                children: [
++                    // Primary dashboard / mode selection
++                    {
++                        path: "home", element: <HomePage />, handle: {
++                            title: "خوانا",
++                            showBack: false
++                        }
++                    },
++
++                    // Document capture lifecycle
++                    {
++                        path: "camera",
++                        children: [
++                            {
++                                path: "select-mode", element: <SelectModePage />, handle: {
++                                    title: "انتخاب حالت تصویربرداری",
++                                    showBack: true,
++                                    backTo: "/home"
++                                }
++                            },
++                            // Single viewfinder instance handling dynamic modes via search params (?mode=auto|manual)
++                            {
++                                index: true, element: <CameraPage />, handle: {
++                                    title: "تصویربرداری", // TODO: Add mode title
++                                    showBack: true,
++                                    backTo: "/home"
++                                }
++                            },
++                        ],
++                    },
++
++                    // Media playback & synchronized TTS reader
++                    {
++                        path: "player", element: <PlayerPage />, handle: {
++                            title: "پخش‌کنندۀ گفتار",
++                            showBack: true,
++                            backTo: "/home"
++                        }
++                    },
++
++                    // Previously processed documents (entered from the profile page)
++                    {
++                        path: "history", element: <HistoryPage />, handle: {
++                            title: "تاریخچه اسناد اخیر",
++                            showBack: true,
++                            backTo: "/profile"
++                        }
++                    },
++
++                    // User profile management
++                    {
++                        path: "profile",
++                        children: [
++                            {
++                                index: true, element: <ProfilePage />, handle: {
++                                    title: "پروفایل کاربری",
++                                    showBack: true,
++                                    backTo: "/home"
++                                }
++                            },
++                            {
++                                path: "edit", element: <EditProfilePage />, handle: {
++                                    title: "ویرایش پروفایل کاربری",
++                                    showBack: true,
++                                    backTo: "/profile"
++                                }
++                            },
++                        ],
++                    },
++
++                    // Application preferences & feedback
++                    {
++                        path: "settings",
++                        children: [
++                            {
++                                index: true, element: <SettingsPage />, handle: {
++                                    title: "تنظیمات",
++                                    showBack: true,
++                                    backTo: "/home"
++                                }
++                            },
++                            {
++                                path: "report-bug", element: <ReportBugPage />, handle: {
++                                    title: "گزارش خطا یا پیشنهاد",
++                                    showBack: true,
++                                    backTo: "/settings"
++                                }
++                            },
++                        ],
++                    },
++                ]
++            },
++        ],
++    },
++    {
++        // Catch-all — redirects based on auth state
++        path: "*",
++        element: <EntryRedirect />,
++    },
++]);
++
++export default function AppRoutes() {
++    return <RouterProvider router={router} />;
++}
+diff --git a/document-reader/src/services/apiClient.js b/document-reader/src/services/apiClient.js
+new file mode 100644
+index 0000000..5536fdf
+--- /dev/null
++++ b/document-reader/src/services/apiClient.js
+@@ -0,0 +1,1076 @@
++import axios from "axios";
++import { Capacitor } from "@capacitor/core";
++import {
++    ERROR_CODES,
++    ERROR_MESSAGES,
++    getPositiveNumberErrorMessage,
++} from "@/constants/error.js";
++
++// One base URL per platform (see .env.example): a Capacitor build runs on a
++// phone/emulator where "localhost" is the device itself, so the native build
++// needs the LAN address of the backend. VITE_API_BASE_URL stays as the shared
++// fallback for setups that define only one address.
++const apiBaseUrl =
++    (Capacitor.isNativePlatform()
++        ? import.meta.env.VITE_API_BASE_URL_MOBILE
++        : import.meta.env.VITE_API_BASE_URL_WEB) ||
++    import.meta.env.VITE_API_BASE_URL ||
++    "https://localhost:7282";
++
++export const BASE_URL = apiBaseUrl.replace(/\/+$/, "");
++
++// Vite exposes env vars on import.meta.env (not process.env as in CRA)
++const parsedTimeout = Number(import.meta.env.VITE_API_TIMEOUT_MS);
++const REQUEST_TIMEOUT_MS =
++    Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : 90000;
++
++const ACCESS_TOKEN_KEY = "access_token";
++const REFRESH_TOKEN_KEY = "refresh_token";
++const ACCESS_TOKEN_EXPIRES_AT_KEY = "access_token_expires_at";
++
++const getStorage = () => {
++    if (typeof window === "undefined") {
++        return null;
++    }
++
++    try {
++        return window.localStorage;
++    } catch {
++        return null;
++    }
++};
++
++export const TTS_SETTINGS_STORAGE_KEY = "tts_settings";
++
++export const DEFAULT_TTS_SETTINGS = Object.freeze({
++    gender: "male",
++    speakerId: 1,
++    audioFormat: "mp3",
++});
++
++const ALLOWED_TTS_GENDERS = new Set(["male", "female"]);
++const ALLOWED_TTS_AUDIO_FORMATS = new Set(["mp3", "opus"]);
++let memoryTtsSettings = { ...DEFAULT_TTS_SETTINGS };
++
++const hasOwn = (value, propertyName) =>
++    Object.prototype.hasOwnProperty.call(value, propertyName);
++
++const normalizeTtsGender = (value) => {
++    const normalized = String(value ?? "")
++        .trim()
++        .toLowerCase();
++
++    if (!ALLOWED_TTS_GENDERS.has(normalized)) {
++        throw new Error(ERROR_MESSAGES[ERROR_CODES.TTS_GENDER_INVALID]);
++    }
++
++    return normalized;
++};
++
++const normalizeTtsSpeakerId = (value) => {
++    const normalized = Number(value);
++
++    if (!Number.isInteger(normalized) || normalized <= 0) {
++        throw new Error(ERROR_MESSAGES[ERROR_CODES.TTS_SPEAKER_ID_INVALID]);
++    }
++
++    return normalized;
++};
++
++const normalizeTtsAudioFormat = (value) => {
++    const normalized = String(value ?? "")
++        .trim()
++        .replace(/^\./, "")
++        .toLowerCase();
++
++    if (!ALLOWED_TTS_AUDIO_FORMATS.has(normalized)) {
++        throw new Error(ERROR_MESSAGES[ERROR_CODES.TTS_AUDIO_FORMAT_INVALID]);
++    }
++
++    return normalized;
++};
++
++const sanitizeStoredTtsSettings = (value) => {
++    const sanitized = { ...DEFAULT_TTS_SETTINGS };
++
++    if (!value || typeof value !== "object" || Array.isArray(value)) {
++        return sanitized;
++    }
++
++    try {
++        if (hasOwn(value, "gender")) {
++            sanitized.gender = normalizeTtsGender(value.gender);
++        }
++    } catch { }
++
++    try {
++        if (hasOwn(value, "speakerId")) {
++            sanitized.speakerId = normalizeTtsSpeakerId(value.speakerId);
++        }
++    } catch { }
++
++    try {
++        if (hasOwn(value, "audioFormat")) {
++            sanitized.audioFormat = normalizeTtsAudioFormat(value.audioFormat);
++        }
++    } catch { }
++
++    return sanitized;
++};
++
++const persistTtsSettings = (settings) => {
++    memoryTtsSettings = { ...settings };
++
++    try {
++        getStorage()?.setItem(TTS_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
++    } catch {
++
++    }
++};
++
++export const ttsSettingsService = {
++    getSettings: () => {
++        const storage = getStorage();
++        if (!storage) {
++            return { ...memoryTtsSettings };
++        }
++
++        try {
++            const rawValue = storage.getItem(TTS_SETTINGS_STORAGE_KEY);
++            if (!rawValue) {
++                return { ...memoryTtsSettings };
++            }
++
++            const sanitized = sanitizeStoredTtsSettings(JSON.parse(rawValue));
++            persistTtsSettings(sanitized);
++            return { ...sanitized };
++        } catch {
++            persistTtsSettings(DEFAULT_TTS_SETTINGS);
++            return { ...DEFAULT_TTS_SETTINGS };
++        }
++    },
++
++    updateSettings: (partialSettings = {}) => {
++        if (
++            !partialSettings ||
++            typeof partialSettings !== "object" ||
++            Array.isArray(partialSettings)
++        ) {
++            throw new Error(ERROR_MESSAGES[ERROR_CODES.TTS_SETTINGS_PAYLOAD_INVALID]);
++        }
++
++        const next = ttsSettingsService.getSettings();
++
++        if (hasOwn(partialSettings, "gender")) {
++            next.gender = normalizeTtsGender(partialSettings.gender);
++        }
++
++        if (hasOwn(partialSettings, "speakerId")) {
++            next.speakerId = normalizeTtsSpeakerId(partialSettings.speakerId);
++        }
++
++        if (hasOwn(partialSettings, "audioFormat")) {
++            next.audioFormat = normalizeTtsAudioFormat(partialSettings.audioFormat);
++        }
++
++        persistTtsSettings(next);
++        return { ...next };
++    },
++
++    saveSettings: (settings) => {
++        if (
++            !settings ||
++            typeof settings !== "object" ||
++            Array.isArray(settings) ||
++            !hasOwn(settings, "gender") ||
++            !hasOwn(settings, "speakerId") ||
++            !hasOwn(settings, "audioFormat")
++        ) {
++            throw new Error(ERROR_MESSAGES[ERROR_CODES.TTS_SETTINGS_INCOMPLETE]);
++        }
++
++        const next = {
++            gender: normalizeTtsGender(settings.gender),
++            speakerId: normalizeTtsSpeakerId(settings.speakerId),
++            audioFormat: normalizeTtsAudioFormat(settings.audioFormat),
++        };
++
++        persistTtsSettings(next);
++        return { ...next };
++    },
++
++    getDefaults: () => ttsSettingsService.getSettings(),
++    saveDefaults: (settings) => ttsSettingsService.saveSettings(settings),
++
++    getGender: () => ttsSettingsService.getSettings().gender,
++    getSpeakerId: () => ttsSettingsService.getSettings().speakerId,
++    getAudioFormat: () => ttsSettingsService.getSettings().audioFormat,
++
++    setGender: (gender) => ttsSettingsService.updateSettings({ gender }),
++    setSpeakerId: (speakerId) => ttsSettingsService.updateSettings({ speakerId }),
++    setAudioFormat: (audioFormat) =>
++        ttsSettingsService.updateSettings({ audioFormat }),
++
++    resetGender: () =>
++        ttsSettingsService.updateSettings({
++            gender: DEFAULT_TTS_SETTINGS.gender,
++        }),
++    resetSpeakerId: () =>
++        ttsSettingsService.updateSettings({
++            speakerId: DEFAULT_TTS_SETTINGS.speakerId,
++        }),
++    resetAudioFormat: () =>
++        ttsSettingsService.updateSettings({
++            audioFormat: DEFAULT_TTS_SETTINGS.audioFormat,
++        }),
++
++    resetSettings: () => {
++        memoryTtsSettings = { ...DEFAULT_TTS_SETTINGS };
++
++        try {
++            getStorage()?.removeItem(TTS_SETTINGS_STORAGE_KEY);
++        } catch { }
++
++        return { ...DEFAULT_TTS_SETTINGS };
++    },
++};
++
++const isMissingTtsSetting = (value) =>
++    value === undefined || value === null || value === "";
++
++const resolveTtsSettings = (options = {}) => {
++    const defaults = ttsSettingsService.getDefaults();
++
++    return {
++        gender: isMissingTtsSetting(options.gender)
++            ? defaults.gender
++            : normalizeTtsGender(options.gender),
++        speakerId: isMissingTtsSetting(options.speakerId)
++            ? defaults.speakerId
++            : normalizeTtsSpeakerId(options.speakerId),
++        audioFormat: isMissingTtsSetting(options.audioFormat)
++            ? defaults.audioFormat
++            : normalizeTtsAudioFormat(options.audioFormat),
++    };
++};
++
++export const tokenService = {
++    getAccessToken: () => getStorage()?.getItem(ACCESS_TOKEN_KEY) ?? null,
++
++    getRefreshToken: () => getStorage()?.getItem(REFRESH_TOKEN_KEY) ?? null,
++
++    getAccessTokenExpiresAt: () => {
++        const value = getStorage()?.getItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
++        const timestamp = Number(value);
++        return Number.isFinite(timestamp) ? timestamp : null;
++    },
++
++    isAccessTokenExpired: (clockSkewSeconds = 30) => {
++        const expiresAt = tokenService.getAccessTokenExpiresAt();
++        if (!expiresAt) {
++            return false;
++        }
++
++        return Date.now() >= expiresAt - clockSkewSeconds * 1000;
++    },
++
++    setTokens: (accessToken, refreshToken, expiresInSeconds) => {
++        const storage = getStorage();
++        if (!storage || !accessToken) {
++            return;
++        }
++
++        storage.setItem(ACCESS_TOKEN_KEY, accessToken);
++
++        if (refreshToken) {
++            storage.setItem(REFRESH_TOKEN_KEY, refreshToken);
++        }
++
++        const lifetime = Number(expiresInSeconds);
++        if (Number.isFinite(lifetime) && lifetime > 0) {
++            storage.setItem(
++                ACCESS_TOKEN_EXPIRES_AT_KEY,
++                String(Date.now() + lifetime * 1000),
++            );
++        } else {
++            storage.removeItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
++        }
++    },
++
++    clearTokens: () => {
++        const storage = getStorage();
++        if (!storage) {
++            return;
++        }
++
++        storage.removeItem(ACCESS_TOKEN_KEY);
++        storage.removeItem(REFRESH_TOKEN_KEY);
++        storage.removeItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
++    },
++};
++
++const axiosConfig = {
++    baseURL: BASE_URL,
++    timeout: REQUEST_TIMEOUT_MS,
++    headers: {
++        Accept: "application/json",
++    },
++};
++
++const publicClient = axios.create(axiosConfig);
++
++const apiClient = axios.create(axiosConfig);
++
++const setAuthorizationHeader = (config, token) => {
++    config.headers = config.headers || {};
++
++    if (typeof config.headers.set === "function") {
++        config.headers.set("Authorization", `Bearer ${token}`);
++    } else {
++        config.headers.Authorization = `Bearer ${token}`;
++    }
++};
++
++apiClient.interceptors.request.use(
++    (config) => {
++        const token = tokenService.getAccessToken();
++
++        if (token) {
++            setAuthorizationHeader(config, token);
++        }
++
++        return config;
++    },
++    (error) => Promise.reject(error),
++);
++
++let authFailureHandler = null;
++
++export const setAuthFailureHandler = (handler) => {
++    authFailureHandler = typeof handler === "function" ? handler : null;
++};
++
++const notifyAuthFailure = (error) => {
++    if (authFailureHandler) {
++        authFailureHandler(error);
++    }
++};
++
++let refreshPromise = null;
++
++const refreshSession = () => {
++    if (refreshPromise) {
++        return refreshPromise;
++    }
++
++    refreshPromise = (async () => {
++        const refreshToken = tokenService.getRefreshToken();
++
++        if (!refreshToken) {
++            throw new Error(ERROR_MESSAGES[ERROR_CODES.SESSION_EXPIRED]);
++        }
++
++        const { data } = await publicClient.post("/auth/refresh", {
++            refreshToken,
++        });
++
++        if (!data?.accessToken || !data?.refreshToken) {
++            throw new Error(ERROR_MESSAGES[ERROR_CODES.SESSION_REFRESH_FAILED]);
++        }
++
++        tokenService.setTokens(
++            data.accessToken,
++            data.refreshToken,
++            data.expiresInSeconds,
++        );
++
++        return data;
++    })()
++        .catch((error) => {
++            tokenService.clearTokens();
++            notifyAuthFailure(error);
++            throw error;
++        })
++        .finally(() => {
++            refreshPromise = null;
++        });
++
++    return refreshPromise;
++};
++
++const isPublicAuthRequest = (url = "") =>
++    ["/auth/send-code", "/auth/verify-code", "/auth/refresh"].some((path) =>
++        String(url).includes(path),
++    );
++
++apiClient.interceptors.response.use(
++    (response) => response,
++    async (error) => {
++        const originalRequest = error.config;
++        const shouldRefresh =
++            error.response?.status === 401 &&
++            originalRequest &&
++            !originalRequest._retry &&
++            !isPublicAuthRequest(originalRequest.url);
++
++        if (!shouldRefresh) {
++            return Promise.reject(error);
++        }
++
++        originalRequest._retry = true;
++
++        try {
++            const session = await refreshSession();
++            setAuthorizationHeader(originalRequest, session.accessToken);
++            return apiClient(originalRequest);
++        } catch (refreshError) {
++            return Promise.reject(refreshError);
++        }
++    },
++);
++
++export const getApiErrorMessage = (
++    error,
++    fallback = ERROR_MESSAGES[ERROR_CODES.GENERIC_SERVER_ERROR],
++) => {
++    if (error?.code === "ECONNABORTED") {
++        return ERROR_MESSAGES[ERROR_CODES.SERVER_UNREACHABLE];
++    }
++
++    const data = error?.response?.data;
++
++    if (typeof data === "string" && data.trim()) {
++        return data;
++    }
++
++    if (data?.message) {
++        return data.message;
++    }
++
++    if (data?.errors && typeof data.errors === "object") {
++        const validationMessage = Object.values(data.errors)
++            .flat()
++            .find((message) => typeof message === "string" && message.trim());
++
++        if (validationMessage) {
++            return validationMessage;
++        }
++    }
++
++    if (data?.title) {
++        return data.title;
++    }
++
++    if (error?.request && !error?.response) {
++        return ERROR_MESSAGES[ERROR_CODES.SERVER_UNREACHABLE];
++    }
++
++    return error?.message || fallback;
++};
++
++export const getRetryAfterSeconds = (error) => {
++    const headerValue = error?.response?.headers?.["retry-after"];
++    const bodyValue = error?.response?.data?.retryAfterSeconds;
++    const value = Number(headerValue ?? bodyValue);
++    return Number.isFinite(value) && value >= 0 ? value : null;
++};
++
++export const apiService = {
++    get: (url, params = {}, config = {}) =>
++        apiClient
++            .get(url, {
++                ...config,
++                params: config.params ?? params,
++            })
++            .then((response) => response.data),
++
++    post: (url, data = {}, config = {}) =>
++        apiClient.post(url, data, config).then((response) => response.data),
++
++    put: (url, data = {}, config = {}) =>
++        apiClient.put(url, data, config).then((response) => response.data),
++
++    patch: (url, data = {}, config = {}) =>
++        apiClient.patch(url, data, config).then((response) => response.data),
++
++    delete: (url, config = {}) =>
++        apiClient.delete(url, config).then((response) => response.data),
++
++    upload: (url, formData, onUploadProgress, config = {}) => {
++        const uploadConfig = { ...config };
++
++        if (typeof onUploadProgress === "function") {
++            uploadConfig.onUploadProgress = (progressEvent) => {
++                if (!progressEvent.total) {
++                    return;
++                }
++
++                const percent = Math.round(
++                    (progressEvent.loaded * 100) / progressEvent.total,
++                );
++
++                onUploadProgress(percent, progressEvent);
++            };
++        }
++
++        return apiClient
++            .post(url, formData, uploadConfig)
++            .then((response) => response.data);
++    },
++};
++
++export const authService = {
++    sendCode: (number) => {
++        const payload = typeof number === "string" ? { number } : number;
++        return publicClient
++            .post("/auth/send-code", payload)
++            .then((response) => response.data);
++    },
++
++    verifyCode: async ({ number, code, fullName } = {}) => {
++        const payload = { number, code };
++
++        if (fullName !== undefined) {
++            payload.fullName = fullName;
++        }
++
++        const { data } = await publicClient.post("/auth/verify-code", payload);
++
++        tokenService.setTokens(
++            data.accessToken,
++            data.refreshToken,
++            data.expiresInSeconds,
++        );
++
++        return data;
++    },
++
++    refresh: () => refreshSession(),
++
++    logout: () => {
++        tokenService.clearTokens();
++        apiService.post("/auth/logout").catch(() => {});
++    },
++
++    isAuthenticated: () => Boolean(tokenService.getAccessToken()),
++};
++
++export const userService = {
++    getMe: () => apiService.get("/user/me"),
++
++    updateMe: (fullNameOrPayload) => {
++        const payload =
++            fullNameOrPayload !== null && typeof fullNameOrPayload === "object"
++                ? fullNameOrPayload
++                : { fullName: fullNameOrPayload };
++
++        return apiService.put("/user/me", payload);
++    },
++};
++
++// POST /reports — [Authorize], body ReportBugRequestDto; the backend answers
++// with ReportBugResponseDto ({ id, reportType, section, description,
++// isDisability, createdAt, message }) and rejects values outside its own
++// allow-list of report types / sections with { message }.
++export const reportsService = {
++    create: ({ reportType, section, description, isDisability = false } = {}) =>
++        apiService.post("/reports", {
++            reportType,
++            section,
++            description,
++            isDisability: Boolean(isDisability),
++        }),
++};
++
++const normalizeReturnDetails = (value) => {
++    if (value === undefined || value === null || value === "") {
++        return null;
++    }
++
++    if ([true, 1, "1", "true"].includes(value)) {
++        return "1";
++    }
++
++    if ([false, 0, "0", "false"].includes(value)) {
++        return "0";
++    }
++
++    throw new Error(ERROR_MESSAGES[ERROR_CODES.RETURN_DETAILS_INVALID]);
++};
++
++const appendPositiveNumber = (formData, fieldName, value) => {
++    if (value === undefined || value === null || value === "") {
++        return;
++    }
++
++    const number = Number(value);
++    if (!Number.isFinite(number) || number <= 0) {
++        throw new Error(getPositiveNumberErrorMessage(fieldName));
++    }
++
++    formData.append(fieldName, String(number));
++};
++
++const appendTtsFormFields = (formData, options = {}) => {
++    const hasReference = Boolean(options.speakerReference);
++
++    if (hasReference) {
++        formData.append("speaker_reference", options.speakerReference);
++    } else {
++        if (typeof options.gender === "string" && options.gender.trim()) {
++            formData.append("gender", options.gender.trim().toLowerCase());
++        }
++
++        if (options.speakerId !== undefined && options.speakerId !== null) {
++            const speakerId = Number(options.speakerId);
++            if (!Number.isInteger(speakerId) || speakerId <= 0) {
++                throw new Error(ERROR_MESSAGES[ERROR_CODES.TTS_SPEAKER_ID_INVALID]);
++            }
++            formData.append("speaker_id", String(speakerId));
++        }
++    }
++
++    if (typeof options.audioFormat === "string" && options.audioFormat.trim()) {
++        formData.append(
++            "audio_format",
++            options.audioFormat.trim().replace(/^\./, "").toLowerCase(),
++        );
++    }
++
++    appendPositiveNumber(formData, "speed", options.speed);
++    appendPositiveNumber(formData, "pitch", options.pitch);
++    appendPositiveNumber(formData, "energy", options.energy);
++};
++
++const createDocumentFormData = (file, options = {}) => {
++    if (!file) {
++        throw new Error(ERROR_MESSAGES[ERROR_CODES.DOCUMENT_FILE_REQUIRED]);
++    }
++
++    const formData = new FormData();
++    formData.append("file", file);
++
++    if (typeof options.category === "string" && options.category.trim()) {
++        formData.append("category", options.category.trim().toLowerCase());
++    }
++
++    const returnDetails = normalizeReturnDetails(options.returnDetails);
++    if (returnDetails !== null) {
++        formData.append("return_details", returnDetails);
++    }
++
++    if (options.includeTtsFields) {
++        appendTtsFormFields(formData, options);
++    }
++
++    return formData;
++};
++
++export const ocrService = {
++    recognize: (
++        file,
++        { category = "book", returnDetails = false, onUploadProgress, signal } = {},
++    ) => {
++        const formData = createDocumentFormData(file, {
++            category,
++            returnDetails,
++        });
++
++        return apiService.upload("/ocr/recognize", formData, onUploadProgress, {
++            signal,
++        });
++    },
++
++    getById: (ocrId, config = {}) =>
++        apiService.get(`/ocr/${encodeURIComponent(ocrId)}`, {}, config),
++};
++
++// GET /history — [Authorize], query { page, pageSize? }; the backend answers
++// OcrHistoryResponseDto ({ page, pageSize, totalCount, totalPages,
++// items: [{ ocrId, title, inputOriginalFileName, createdAt }] }) and rejects
++// out-of-range paging values with { message }.
++// PATCH /history/{ocrId}/title — renames one record (body { title }); answers
++// the updated OcrHistoryItemDto, 400 { message } for an empty title, or 404.
++export const historyService = {
++    getMine: (params = {}, config = {}) =>
++        apiService.get("/history", params, config),
++
++    rename: (ocrId, title, config = {}) =>
++        apiService.patch(
++            `/history/${encodeURIComponent(ocrId)}/title`,
++            { title },
++            config,
++        ),
++};
++
++const createPresetTtsPayload = (options = {}) => {
++    const { text, speed = 1, pitch = 1, energy = 1, ocrId = null } = options;
++    const settings = resolveTtsSettings(options);
++
++    return {
++        text,
++        gender: settings.gender,
++        speakerId: settings.speakerId,
++        audioFormat: settings.audioFormat,
++        speed,
++        pitch,
++        energy,
++        ocrId,
++    };
++};
++
++export const ttsService = {
++
++    create: (options) => apiService.post("/tts", createPresetTtsPayload(options)),
++
++    createLegacy: (options) =>
++        apiService.post("/tts/stream", createPresetTtsPayload(options)),
++
++    createWithReference: (options = {}) => {
++        const {
++            text,
++            speakerReference,
++            speed = 1,
++            pitch = 1,
++            energy = 1,
++            ocrId,
++            onUploadProgress,
++            signal,
++        } = options;
++
++        if (!speakerReference) {
++            throw new Error(ERROR_MESSAGES[ERROR_CODES.REFERENCE_AUDIO_REQUIRED]);
++        }
++
++        const settings = resolveTtsSettings(options);
++        const formData = new FormData();
++        formData.append("text", text);
++        formData.append("speaker_reference", speakerReference);
++        formData.append("audio_format", settings.audioFormat);
++        appendPositiveNumber(formData, "speed", speed);
++        appendPositiveNumber(formData, "pitch", pitch);
++        appendPositiveNumber(formData, "energy", energy);
++
++        if (ocrId) {
++            formData.append("ocr_id", ocrId);
++        }
++
++        return apiService.upload("/tts/reference", formData, onUploadProgress, {
++            signal,
++        });
++    },
++
++    getById: (ttsId, config = {}) =>
++        apiService.get(`/tts/${encodeURIComponent(ttsId)}`, {}, config),
++
++    // GET /tts/{id}/timeline — answers TtsTimelineResponseDto ({ ttsId, text,
++    // audioUrl, segmentCount, totalDurationMs, segments: [{ index, text,
++    // startMs, endMs, durationMs, fromCache, isLast }] }): the audio URL plus
++    // per-sentence timings the karaoke player syncs against.
++    getTimeline: (ttsId, config = {}) =>
++        apiService.get(`/tts/${encodeURIComponent(ttsId)}/timeline`, {}, config),
++
++    getSentenceAudio: (sentenceAudioUrlOrTtsId, config = {}) =>
++        apiClient
++            .get(normalizeSentenceAudioPath(sentenceAudioUrlOrTtsId), {
++                timeout: 0,
++                ...config,
++            })
++            .then((response) => response.data),
++
++    sentenceSegmentToBlob: (segment) => ttsSentenceSegmentToBlob(segment),
++
++    playSentences: (sentenceResponse, options) =>
++        playTtsSentenceAudio(sentenceResponse, options),
++
++    getAudioUrl: (audioUrlOrTtsId, accessToken) =>
++        buildAuthenticatedAudioUrl(audioUrlOrTtsId, accessToken),
++
++    getAudioBlob: (audioUrlOrTtsId, config = {}) =>
++        apiClient
++            .get(normalizeAudioPath(audioUrlOrTtsId), {
++                ...config,
++                responseType: "blob",
++                timeout: 0,
++            })
++            .then((response) => response.data),
++};
++
++const createPipelineFormData = (file, options = {}) => {
++    const settings = resolveTtsSettings(options);
++
++    return createDocumentFormData(file, {
++        ...options,
++        ...settings,
++        includeTtsFields: true,
++    });
++};
++
++export const pipelineService = {
++    documentToSpeech: (file, options = {}) => {
++        const {
++            category = "book",
++            returnDetails = false,
++            onUploadProgress,
++            signal,
++        } = options;
++
++        const formData = createPipelineFormData(file, {
++            ...options,
++            category,
++            returnDetails,
++        });
++
++        return apiService.upload(
++            "/pipeline/document-to-speech",
++            formData,
++            onUploadProgress,
++            { signal, timeout: 0 },
++        );
++    },
++
++    imageToSpeechLegacy: (file, options = {}) => {
++        const {
++            category = "book",
++            returnDetails = false,
++            onUploadProgress,
++            signal,
++        } = options;
++
++        const formData = createPipelineFormData(file, {
++            ...options,
++            category,
++            returnDetails,
++        });
++
++        return apiService.upload(
++            "/pipeline/image-to-speech",
++            formData,
++            onUploadProgress,
++            { signal, timeout: 0 },
++        );
++    },
++};
++
++const normalizeSentenceAudioPath = (sentenceAudioUrlOrTtsId) => {
++    const value = String(sentenceAudioUrlOrTtsId ?? "").trim();
++
++    if (!value) {
++        throw new Error(ERROR_MESSAGES[ERROR_CODES.SENTENCE_AUDIO_SOURCE_INVALID]);
++    }
++
++    if (/^https?:\/\//i.test(value) || value.includes("/sentences")) {
++        return value;
++    }
++
++    return `/tts/${encodeURIComponent(value)}/sentences`;
++};
++
++export const decodeBase64Audio = (audioBase64) => {
++    const value = String(audioBase64 ?? "").trim();
++
++    if (!value) {
++        throw new Error(ERROR_MESSAGES[ERROR_CODES.SENTENCE_AUDIO_EMPTY]);
++    }
++
++    if (typeof globalThis.atob !== "function") {
++        throw new Error(ERROR_MESSAGES[ERROR_CODES.AUDIO_UNSUPPORTED_BROWSER]);
++    }
++
++    let binary;
++
++    try {
++        binary = globalThis.atob(value);
++    } catch {
++        throw new Error(ERROR_MESSAGES[ERROR_CODES.SENTENCE_AUDIO_UNREADABLE]);
++    }
++
++    const bytes = new Uint8Array(binary.length);
++
++    for (let index = 0; index < binary.length; index += 1) {
++        bytes[index] = binary.charCodeAt(index);
++    }
++
++    return bytes;
++};
++
++export const formatTtsAudioDuration = (durationMs) => {
++    const numericDuration = Number(durationMs);
++
++    if (!Number.isFinite(numericDuration) || numericDuration < 0) {
++        return "--:--.---";
++    }
++
++    const totalMilliseconds = Math.round(numericDuration);
++    const milliseconds = totalMilliseconds % 1000;
++    const totalSeconds = Math.floor(totalMilliseconds / 1000);
++    const seconds = totalSeconds % 60;
++    const totalMinutes = Math.floor(totalSeconds / 60);
++    const minutes = totalMinutes % 60;
++    const hours = Math.floor(totalMinutes / 60);
++    const millisecondsText = String(milliseconds).padStart(3, "0");
++    const secondsText = String(seconds).padStart(2, "0");
++    const minutesText = String(minutes).padStart(2, "0");
++
++    return hours > 0
++        ? `${String(hours).padStart(2, "0")}:${minutesText}:${secondsText}.${millisecondsText}`
++        : `${minutesText}:${secondsText}.${millisecondsText}`;
++};
++
++export const ttsSentenceSegmentToBlob = (segment) => {
++    if (!segment || typeof segment !== "object") {
++        throw new Error(ERROR_MESSAGES[ERROR_CODES.SENTENCE_AUDIO_DATA_INVALID]);
++    }
++
++    return new Blob([decodeBase64Audio(segment.audioBase64)], {
++        type: segment.contentType || "audio/mpeg",
++    });
++};
++
++const createPlaybackAbortError = () => {
++    if (typeof DOMException === "function") {
++        return new DOMException(
++            ERROR_MESSAGES[ERROR_CODES.PLAYBACK_ABORTED],
++            "AbortError",
++        );
++    }
++
++    const error = new Error(ERROR_MESSAGES[ERROR_CODES.PLAYBACK_ABORTED]);
++    error.name = "AbortError";
++    return error;
++};
++
++const playAudioElementOnce = (audioElement, signal) =>
++    new Promise((resolve, reject) => {
++        let settled = false;
++
++        const cleanup = () => {
++            audioElement.removeEventListener("ended", onEnded);
++            audioElement.removeEventListener("error", onError);
++            signal?.removeEventListener("abort", onAbort);
++        };
++
++        const settle = (callback, value) => {
++            if (settled) {
++                return;
++            }
++
++            settled = true;
++            cleanup();
++            callback(value);
++        };
++
++        const onEnded = () => settle(resolve);
++        const onError = () =>
++            settle(
++                reject,
++                new Error(ERROR_MESSAGES[ERROR_CODES.PLAYBACK_FAILED]),
++            );
++        const onAbort = () => {
++            audioElement.pause();
++            settle(reject, createPlaybackAbortError());
++        };
++
++        audioElement.addEventListener("ended", onEnded, { once: true });
++        audioElement.addEventListener("error", onError, { once: true });
++        signal?.addEventListener("abort", onAbort, { once: true });
++
++        if (signal?.aborted) {
++            onAbort();
++            return;
++        }
++
++        try {
++            Promise.resolve(audioElement.play()).catch((error) =>
++                settle(reject, error),
++            );
++        } catch (error) {
++            settle(reject, error);
++        }
++    });
++
++export const playTtsSentenceAudio = async (
++    sentenceResponse,
++    { audioElement, onSentenceChange, signal } = {},
++) => {
++    if (!audioElement || typeof audioElement.play !== "function") {
++        throw new Error(ERROR_MESSAGES[ERROR_CODES.AUDIO_PLAYER_UNAVAILABLE]);
++    }
++
++    const segments = sentenceResponse?.segments;
++
++    if (!Array.isArray(segments) || segments.length === 0) {
++        throw new Error(ERROR_MESSAGES[ERROR_CODES.NO_SENTENCE_AUDIO]);
++    }
++
++    if (
++        typeof globalThis.URL?.createObjectURL !== "function" ||
++        typeof globalThis.URL?.revokeObjectURL !== "function"
++    ) {
++        throw new Error(ERROR_MESSAGES[ERROR_CODES.AUDIO_UNSUPPORTED_BROWSER]);
++    }
++
++    try {
++        for (let index = 0; index < segments.length; index += 1) {
++            if (signal?.aborted) {
++                throw createPlaybackAbortError();
++            }
++
++            const segment = segments[index];
++            const objectUrl = globalThis.URL.createObjectURL(
++                ttsSentenceSegmentToBlob(segment),
++            );
++
++            try {
++                audioElement.src = objectUrl;
++                audioElement.load?.();
++                onSentenceChange?.(segment, index);
++                await playAudioElementOnce(audioElement, signal);
++            } finally {
++                globalThis.URL.revokeObjectURL(objectUrl);
++            }
++        }
++    } finally {
++        onSentenceChange?.(null, -1);
++    }
++};
++
++const normalizeAudioPath = (audioUrlOrTtsId) => {
++    const value = String(audioUrlOrTtsId ?? "").trim();
++
++    if (!value) {
++        throw new Error(ERROR_MESSAGES[ERROR_CODES.AUDIO_SOURCE_INVALID]);
++    }
++
++    if (/^https?:\/\//i.test(value) || value.includes("/timed-audio")) {
++        return value;
++    }
++
++    return `/tts/${encodeURIComponent(value)}/timed-audio`;
++};
++
++export const toAbsoluteApiUrl = (path) => {
++    const value = String(path ?? "").trim();
++
++    if (/^https?:\/\//i.test(value)) {
++        return value;
++    }
++
++    return `${BASE_URL}/${value.replace(/^\/+/, "")}`;
++};
++
++export const buildAuthenticatedAudioUrl = (
++    audioUrlOrTtsId,
++    accessToken = tokenService.getAccessToken(),
++) => {
++    const absoluteUrl = toAbsoluteApiUrl(normalizeAudioPath(audioUrlOrTtsId));
++    const url = new URL(absoluteUrl);
++
++    if (accessToken) {
++        url.searchParams.set("access_token", accessToken);
++    }
++
++    return url.toString();
++};
++
++export default apiClient;
+\ No newline at end of file
+diff --git a/document-reader/vite.config.js b/document-reader/vite.config.js
+new file mode 100644
+index 0000000..e14a0c6
+--- /dev/null
++++ b/document-reader/vite.config.js
+@@ -0,0 +1,48 @@
++import { defineConfig } from 'vite'
++import react from '@vitejs/plugin-react'
++import tailwindcss from '@tailwindcss/vite'
++import mkcert from 'vite-plugin-mkcert'
++import path from 'path'
++
++// Dev-only API proxy: forwards same-origin API calls (/auth, /history, ...)
++// from the dev server to the backend. The app keeps using its configured
++// absolute API base URL (see .env.*); the proxy only matters when that base
++// URL is "/" (same-origin) — e.g. sandbox previews where "localhost" is not
++// the machine running the backend.
++const API_PROXY_PATHS = [
++  '/auth', '/user', '/ocr', '/tts', '/pipeline',
++  '/history', '/reports', '/admin', '/health', '/hangfire', '/swagger',
++];
++const apiProxy = Object.fromEntries(
++  API_PROXY_PATHS.map((path) => [
++    path,
++    {
++      target: process.env.VITE_DEV_PROXY_TARGET || 'http://localhost:7282',
++      changeOrigin: true,
++      secure: false,
++    },
++  ]),
++);
++
++// https://vite.dev/config/
++export default defineConfig({
++  plugins: [
++    react(),
++    tailwindcss(),
++    // Set VITE_DEV_HTTPS=0 to skip local HTTPS certificates (e.g. inside
++    // sandboxes/CI where a TLS-terminating proxy fronts the dev server)
++    ...(process.env.VITE_DEV_HTTPS === '0' ? [] : [mkcert()]),
++  ],
++  resolve: {
++    alias: {
++      "@": path.resolve(__dirname, "./src"),
++    },
++  },
++  server: {
++    host: '0.0.0.0',
++    // Besides localhost the dev server may be reached through a preview
++    // host (e.g. *.e2b.app)
++    allowedHosts: ['localhost', '127.0.0.1', '.e2b.app'],
++    proxy: apiProxy,
++  },
++})
+diff --git a/src/components/history/HistoryListItem.jsx b/src/components/history/HistoryListItem.jsx
+index d156605..041bfcf 100644
+--- a/src/components/history/HistoryListItem.jsx
++++ b/src/components/history/HistoryListItem.jsx
+@@ -1,30 +1,49 @@
+ import React from 'react';
+-import { MdOutlineDescription } from 'react-icons/md';
++import { MdArrowBackIosNew, MdOutlineDescription, MdOutlineEditNote } from 'react-icons/md';
+ 
+ // One row of the history list. Mirrors the MenuListItem card language
+-// (rounded-xl / border-slate-800 / bg-slate-900 / px-4 py-3.5) but shows
+-// document metadata (title + file name + creation date) instead of acting
+-// as a navigation item — so there is no chevron and no hover/press motion.
+-export default function HistoryListItem({ title, fileName, createdAtLabel }) {
++// (rounded-xl / border-slate-800 / bg-slate-900 / px-4 py-3.5). The row body
++// opens the document (like MenuListItem navigates) and the trailing pencil
++// button renames it via PATCH /history/{ocrId}/title.
++export default function HistoryListItem({
++    title,
++    fileName,
++    createdAtLabel,
++    onClick,
++    onRename,
++    isBusy = false,
++}) {
+     return (
+-        <div className="flex w-full items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3.5 select-none">
+-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-amber-300">
+-                <MdOutlineDescription size={"1.25rem"} />
+-            </span>
+-            <div className="flex min-w-0 flex-1 flex-col gap-1 text-right">
+-                <span className="truncate text-base font-bold text-slate-50">
+-                    {title}
++        <div className="flex w-full items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3.5 select-none">
++            <button type="button" onClick={onClick} disabled={isBusy}
++                className="group flex min-w-0 flex-1 items-center gap-2.5 text-right">
++                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-amber-300">
++                    <MdOutlineDescription size={"1.25rem"} />
+                 </span>
+-                <span className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
+-                    {fileName && (
+-                        <>
+-                            <span className="truncate">{fileName}</span>
+-                            <span aria-hidden="true" className="shrink-0 text-slate-600">•</span>
+-                        </>
+-                    )}
+-                    <span className="shrink-0">{createdAtLabel}</span>
+-                </span>
+-            </div>
++                <div className="flex min-w-0 flex-1 flex-col gap-1 text-right">
++                    <span className="truncate text-base font-bold text-slate-50">
++                        {title}
++                    </span>
++                    <span className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
++                        {fileName && (
++                            <>
++                                <span className="truncate">{fileName}</span>
++                                <span aria-hidden="true" className="shrink-0 text-slate-600">•</span>
++                            </>
++                        )}
++                        <span className="shrink-0">{createdAtLabel}</span>
++                    </span>
++                </div>
++                {isBusy
++                    ? <span className="loading loading-spinner loading-md shrink-0 text-amber-400"></span>
++                    : <MdArrowBackIosNew size={"1.1rem"}
++                        className="shrink-0 text-slate-400 transition-transform duration-200 group-active:-translate-x-1" />}
++            </button>
++            <button type="button" onClick={onRename} disabled={isBusy}
++                aria-label={`تغییر عنوان ${title}`}
++                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-slate-400 transition hover:text-amber-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50">
++                <MdOutlineEditNote size={"1.25rem"} />
++            </button>
+         </div>
+     );
+-}
+\ No newline at end of file
++}
+diff --git a/src/components/history/index.js b/src/components/history/index.js
+index 8ed3eca..e37f650 100644
+--- a/src/components/history/index.js
++++ b/src/components/history/index.js
+@@ -1 +1 @@
+-export { default } from "./HistoryListItem"
+\ No newline at end of file
++export { default } from "./HistoryListItem"
+diff --git a/src/components/ui/dialog.jsx b/src/components/ui/dialog.jsx
+new file mode 100644
+index 0000000..e2e7c06
+--- /dev/null
++++ b/src/components/ui/dialog.jsx
+@@ -0,0 +1,56 @@
++import React from "react";
++
++export function Dialog({ open, onOpenChange, children }) {
++    if (!open) return null;
++
++    return (
++        <div
++            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
++            onMouseDown={(event) => {
++                if (event.target === event.currentTarget) {
++                    onOpenChange?.(false);
++                }
++            }}
++        >
++            {children}
++        </div>
++    );
++}
++
++export function DialogContent({ children, className = "", ...props }) {
++    return (
++        <div
++            role="dialog"
++            aria-modal="true"
++            className={`w-full rounded-2xl border p-5 shadow-xl ${className}`}
++            onMouseDown={(event) => event.stopPropagation()}
++            {...props}
++        >
++            {children}
++        </div>
++    );
++}
++
++export function DialogHeader({ children, className = "", ...props }) {
++    return (
++        <div className={`mb-4 ${className}`} {...props}>
++            {children}
++        </div>
++    );
++}
++
++export function DialogTitle({ children, className = "", ...props }) {
++    return (
++        <h2 className={`text-lg font-bold ${className}`} {...props}>
++            {children}
++        </h2>
++    );
++}
++
++export function DialogFooter({ children, className = "", ...props }) {
++    return (
++        <div className={`mt-5 ${className}`} {...props}>
++            {children}
++        </div>
++    );
++}
+\ No newline at end of file
+diff --git a/src/pages/history/Historypage.jsx b/src/pages/history/Historypage.jsx
+index ec7c90d..65cd105 100644
+--- a/src/pages/history/Historypage.jsx
++++ b/src/pages/history/Historypage.jsx
+@@ -1,9 +1,24 @@
+ import React, { useEffect, useState } from 'react';
++import { useNavigate } from 'react-router-dom';
+ import { toast } from 'sonner';
+ import { MdErrorOutline, MdOutlineHistory, MdRefresh } from 'react-icons/md';
+ import HistoryListItem from '../../components/history/HistoryListItem';
++import {
++    Dialog,
++    DialogContent,
++    DialogFooter,
++    DialogHeader,
++    DialogTitle,
++} from '@/components/ui/dialog';
++import { Input } from '@/components/ui/input';
++import { CAPTURED_PIPELINE_KEY, CAPTURED_TEXT_KEY } from '@/constants/player';
+ // All API calls go through apiClient
+-import { historyService, getApiErrorMessage } from '../../services/apiClient';
++import {
++    historyService,
++    ocrService,
++    ttsService,
++    getApiErrorMessage,
++} from '../../services/apiClient';
+ 
+ // Backend contract: GET /history answers OcrHistoryResponseDto
+ // ({ page, pageSize, totalCount, totalPages, items:[{ ocrId, title,
+@@ -11,6 +26,10 @@ import { historyService, getApiErrorMessage } from '../../services/apiClient';
+ // the backend picks its own default (20) and echoes it back in the response.
+ const FIRST_PAGE = 1;
+ 
++// Backend contract: UpdateHistoryTitleRequestDto.Title is [MaxLength(200)]
++// (OcrHistoryTitleGenerator.MaxTitleLength)
++const TITLE_MAX_LENGTH = 200;
++
+ // createdAt is a UTC DateTime serialized as ISO-8601; show it in the
+ // Persian (Jalali) calendar like the rest of the Persian-first UI.
+ const formatCreatedAt = (value) => {
+@@ -20,6 +39,8 @@ const formatCreatedAt = (value) => {
+ };
+ 
+ export default function HistoryPage() {
++    const navigate = useNavigate();
++
+     // List data — kept in page state (same pattern as the other pages)
+     const [items, setItems] = useState([]);
+     const [page, setPage] = useState(FIRST_PAGE);
+@@ -30,6 +51,14 @@ export default function HistoryPage() {
+     const [errorMessage, setErrorMessage] = useState("");
+     const [isLoadingMore, setIsLoadingMore] = useState(false);
+ 
++    // ocrId of the document currently being opened in the player
++    const [openingId, setOpeningId] = useState(null);
++
++    // Rename dialog state
++    const [renameItem, setRenameItem] = useState(null);
++    const [renameValue, setRenameValue] = useState("");
++    const [isSavingTitle, setIsSavingTitle] = useState(false);
++
+     // Real API call: GET /history?page=N (see historyService in apiClient)
+     const fetchPage = async (nextPage, { replace = false } = {}) => {
+         if (replace) {
+@@ -64,6 +93,71 @@ export default function HistoryPage() {
+         fetchPage(FIRST_PAGE, { replace: true });
+     }, []);
+ 
++    // Open one history document in the speech player — the same storage
++    // contract the camera capture flow uses (see useDocumentToSpeech):
++    //   1) GET /ocr/{ocrId}         → the stored document text
++    //   2) POST /tts                → speech for that text (with ocrId linked)
++    //   3) GET /tts/{ttsId}/timeline → audioUrl + per-sentence timings
++    const handleOpenDocument = async (item) => {
++        if (openingId) return;
++        setOpeningId(item.ocrId);
++
++        try {
++            const ocr = await ocrService.getById(item.ocrId);
++            const text = ocr?.text || "";
++
++            const tts = await ttsService.create({ text, ocrId: item.ocrId });
++            const timeline = await ttsService.getTimeline(tts.ttsId);
++
++            localStorage.setItem(CAPTURED_TEXT_KEY, text);
++            localStorage.setItem(
++                CAPTURED_PIPELINE_KEY,
++                JSON.stringify({
++                    ...timeline,
++                    audioUrl: timeline?.audioUrl || tts?.timedAudioUrl,
++                }),
++            );
++
++            navigate("/player");
++            // No setState after navigate — the page is transitioning
++        } catch (err) {
++            toast.error(getApiErrorMessage(err, "بازکردن سند ناموفق بود"));
++            setOpeningId(null);
++        }
++    };
++
++    const handleOpenRename = (item) => {
++        setRenameItem(item);
++        setRenameValue(item.title || "");
++    };
++
++    // Real API call: PATCH /history/{ocrId}/title (see historyService)
++    const handleRenameSave = async () => {
++        const title = renameValue.trim();
++        if (!renameItem || isSavingTitle) return;
++
++        if (!title) {
++            toast.error("عنوان نمی‌تواند خالی باشد.");
++            return;
++        }
++
++        setIsSavingTitle(true);
++        try {
++            const updated = await historyService.rename(renameItem.ocrId, title);
++
++            // The backend answers the updated item — merge it into the row
++            setItems((prev) =>
++                prev.map((it) => (it.ocrId === renameItem.ocrId ? { ...it, ...updated } : it)),
++            );
++            setRenameItem(null);
++            toast.success("عنوان سند با موفقیت تغییر کرد.", { duration: 2000 });
++        } catch (err) {
++            toast.error(getApiErrorMessage(err, "تغییر عنوان ناموفق بود"));
++        } finally {
++            setIsSavingTitle(false);
++        }
++    };
++
+     const hasMore = status === "ready" && page < totalPages;
+ 
+     return (
+@@ -126,6 +220,9 @@ export default function HistoryPage() {
+                             title={item.title}
+                             fileName={item.inputOriginalFileName}
+                             createdAtLabel={formatCreatedAt(item.createdAt)}
++                            isBusy={openingId === item.ocrId}
++                            onClick={() => handleOpenDocument(item)}
++                            onRename={() => handleOpenRename(item)}
+                         />
+                     ))}
+                 </div>
+@@ -139,6 +236,41 @@ export default function HistoryPage() {
+                     نمایش موارد بیشتر
+                 </button>
+             )}
++
++            {/* Rename dialog — PATCH /history/{ocrId}/title */}
++            <Dialog open={!!renameItem} onOpenChange={(open) => !open && setRenameItem(null)}>
++                <DialogContent dir="rtl"
++                    className="max-w-sm border-slate-800 bg-slate-900 text-slate-50">
++                    <DialogHeader>
++                        <DialogTitle className="text-right text-slate-50">
++                            تغییر عنوان سند
++                        </DialogTitle>
++                    </DialogHeader>
++                    <div className="flex w-full flex-col gap-1.5">
++                        <label htmlFor="history-title" className="text-base font-bold text-slate-100">
++                            عنوان
++                        </label>
++                        <Input id="history-title" dir="rtl" value={renameValue}
++                            onChange={(e) => setRenameValue(e.target.value)}
++                            onKeyDown={(e) => e.key === "Enter" && handleRenameSave()}
++                            maxLength={TITLE_MAX_LENGTH} disabled={isSavingTitle}
++                            placeholder="عنوان سند را وارد کنید"
++                            className="h-10 rounded-xl border-slate-800 bg-slate-900 px-3 text-sm font-bold text-slate-100" />
++                    </div>
++                    <DialogFooter className="flex flex-row gap-2">
++                        <button type="button" onClick={() => setRenameItem(null)} disabled={isSavingTitle}
++                            className="flex h-11 flex-1 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-base font-bold text-slate-300 transition active:scale-[0.98] disabled:opacity-50">
++                            انصراف
++                        </button>
++                        <button type="button" onClick={handleRenameSave}
++                            disabled={isSavingTitle || !renameValue.trim()}
++                            className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-cyan-400 text-base font-bold text-slate-900 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-500 disabled:text-gray-800">
++                            {isSavingTitle && <span className="loading loading-spinner loading-md"></span>}
++                            ذخیره
++                        </button>
++                    </DialogFooter>
++                </DialogContent>
++            </Dialog>
+         </div>
+     );
+-}
+\ No newline at end of file
++}
+diff --git a/src/pages/profile/ProfilePage.jsx b/src/pages/profile/ProfilePage.jsx
+index 171ab5b..cd9fca7 100644
+--- a/src/pages/profile/ProfilePage.jsx
++++ b/src/pages/profile/ProfilePage.jsx
+@@ -33,7 +33,6 @@ export default function ProfilePage() {
+                     icon={<MdOutlineHistory size={"1.5rem"} />}
+                     label="تاریخچه اسناد اخیر"
+                     onClick={() => navigate("/history")} />
+-                    
+                 <MenuListItem
+                     icon={<MdOutlineLogout size={"1.5rem"} />}
+                     label="خروج از حساب کاربری"
+diff --git a/src/routes/AppRoutes.jsx b/src/routes/AppRoutes.jsx
+index c2dd164..78b323d 100644
+--- a/src/routes/AppRoutes.jsx
++++ b/src/routes/AppRoutes.jsx
+@@ -7,7 +7,7 @@ import HomePage from "../pages/home/HomePage";
+ import SelectModePage from "../pages/camera/SelectModePage";
+ import CameraPage from "../pages/camera/CameraPage";
+ import PlayerPage from "../pages/player/PlayerPage";
+-import HistoryPage from "../pages/history/HistoryPage"; 
++import HistoryPage from "../pages/history/HistoryPage";
+ import ProfilePage from "../pages/profile/ProfilePage";
+ import EditProfilePage from "../pages/profile/EditProfilePage";
+ import SettingsPage from "../pages/settings/SettingsPage";
+@@ -97,6 +97,15 @@ const router = createBrowserRouter([
+                         }
+                     },
+ 
++                    // Previously processed documents (entered from the profile page)
++                    {
++                        path: "history", element: <HistoryPage />, handle: {
++                            title: "تاریخچه اسناد اخیر",
++                            showBack: true,
++                            backTo: "/profile"
++                        }
++                    },
++
+                     // User profile management
+                     {
+                         path: "profile",
+@@ -138,15 +147,6 @@ const router = createBrowserRouter([
+                             },
+                         ],
+                     },
+-
+-                    // Previously processed documents (entered from the profile page)
+-{
+-    path: "history", element: <HistoryPage />, handle: {
+-        title: "تاریخچه اسناد اخیر",
+-        showBack: true,
+-        backTo: "/profile"
+-    }
+-},
+                 ]
+             },
+         ],
+diff --git a/src/services/apiClient.js b/src/services/apiClient.js
+index ea8a5fa..5536fdf 100644
+--- a/src/services/apiClient.js
++++ b/src/services/apiClient.js
+@@ -689,9 +689,18 @@ export const ocrService = {
+ // OcrHistoryResponseDto ({ page, pageSize, totalCount, totalPages,
+ // items: [{ ocrId, title, inputOriginalFileName, createdAt }] }) and rejects
+ // out-of-range paging values with { message }.
++// PATCH /history/{ocrId}/title — renames one record (body { title }); answers
++// the updated OcrHistoryItemDto, 400 { message } for an empty title, or 404.
+ export const historyService = {
+     getMine: (params = {}, config = {}) =>
+         apiService.get("/history", params, config),
++
++    rename: (ocrId, title, config = {}) =>
++        apiService.patch(
++            `/history/${encodeURIComponent(ocrId)}/title`,
++            { title },
++            config,
++        ),
+ };
+ 
+ const createPresetTtsPayload = (options = {}) => {
+@@ -754,6 +763,13 @@ export const ttsService = {
+     getById: (ttsId, config = {}) =>
+         apiService.get(`/tts/${encodeURIComponent(ttsId)}`, {}, config),
+ 
++    // GET /tts/{id}/timeline — answers TtsTimelineResponseDto ({ ttsId, text,
++    // audioUrl, segmentCount, totalDurationMs, segments: [{ index, text,
++    // startMs, endMs, durationMs, fromCache, isLast }] }): the audio URL plus
++    // per-sentence timings the karaoke player syncs against.
++    getTimeline: (ttsId, config = {}) =>
++        apiService.get(`/tts/${encodeURIComponent(ttsId)}/timeline`, {}, config),
++
+     getSentenceAudio: (sentenceAudioUrlOrTtsId, config = {}) =>
+         apiClient
+             .get(normalizeSentenceAudioPath(sentenceAudioUrlOrTtsId), {
+-- 
+2.53.0.windows.1
+

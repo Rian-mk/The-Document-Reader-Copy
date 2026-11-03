@@ -1,0 +1,43 @@
+{
+  "changed": [
+    "DocumentReaderBackend.csproj",
+    "Program.cs",
+    "appsettings.json",
+    "Services/AdminSeeder.cs",
+    "Services/OcrService.cs",
+    "Services/SmsSender.cs",
+    "Services/SpeakerReferenceStore.cs",
+    "Services/TimedAudioService.cs",
+    "Services/TokenService.cs",
+    "Services/TtsSentenceAudioService.cs",
+    "Services/TtsService.cs",
+    "Dtos/AuthDtos.cs",
+    "Infrastructure/HangfireDashboardAuthorizationFilter.cs",
+    "Controllers/AdminOcrAssetsController.cs",
+    "Controllers/AuthController.cs",
+    "Controllers/PipelineController.cs",
+    "Controllers/PipelineStreamController.cs",
+    "Controllers/TtsController.cs",
+    "Options/AppOptions.cs",
+    "Services/Streaming/DeepmineNdjsonAudioStream.cs",
+    "README.md"
+  ],
+  "added": [
+    "packages.lock.json",
+    "Services/WebhookSmsSender.cs",
+    "Controllers/PlaybackController.cs",
+    "Jobs/MaintenanceWorker.cs",
+    "deployment/appsettings.Production.json.example",
+    "deployment/nginx.conf.example",
+    "deployment/document-reader.service.example",
+    "deployment/README-DEPLOYMENT-FA.md",
+    "Infrastructure/Security/GenerationGuard.cs",
+    "Infrastructure/Security/GenerationGuardFilter.cs",
+    "Infrastructure/Security/BoundedNdjsonReader.cs",
+    "Infrastructure/Security/LeasedAudioStream.cs",
+    "Infrastructure/Security/ProductionConfiguration.cs",
+    "Infrastructure/Security/RefreshCookie.cs"
+  ],
+  "unchanged_exclusion": "Services/VerificationCodeService.cs",
+  "verification_service_sha256": "7f38fc1d2371feebf109ab02d661a0327ea9693baa2e0ca61ecf009a34282304"
+}
